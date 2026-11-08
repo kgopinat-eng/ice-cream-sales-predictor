@@ -21,7 +21,7 @@ CITIES = {
 
 URL = "https://api.open-meteo.com/v1/forecast"
 
-# Load the updated model trained on temperature and rain probability.
+# Load the model trained with both predictors.
 model_path = Path(__file__).parent / "model.pkl"
 
 with open(model_path, "rb") as f:
@@ -31,12 +31,12 @@ st.title("🍦 Ice Cream Sales Predictor")
 
 st.write(
     "Choose a city and date to estimate ice cream sales using "
-    "the forecast temperature and chance of precipitation."
+    "temperature and precipitation probability."
 )
 
 st.caption(
-    "Classroom demo trained on simulated data. Incorrect predictions "
-    "could lead to ordering too much or too little stock."
+    "This classroom model uses simulated data. Incorrect predictions "
+    "could lead to preparing too much or too little stock."
 )
 
 city = st.selectbox("City", list(CITIES))
@@ -76,54 +76,6 @@ if st.button("Predict sales", type="primary"):
             temperature = daily["temperature_2m_max"][0]
             rain_probability = daily["precipitation_probability_max"][0]
 
-        if temperature is None or rain_probability is None:
-            st.error(
-                "The weather forecast is incomplete. "
-                "Please choose another date."
-            )
-        else:
-            # These columns must match the updated training notebook.
-            features = pd.DataFrame({
-                "temperature": [temperature],
-                "rain_probability": [rain_probability],
-            })
-
-            prediction = max(0, model.predict(features)[0])
-
-            col1, col2, col3 = st.columns(3)
-
-            col1.metric(
-                "Forecast high",
-                f"{temperature:.0f} °F"
-            )
-
-            col2.metric(
-                "Chance of precipitation",
-                f"{rain_probability:.0f}%"
-            )
-
-            col3.metric(
-                "Predicted sales",
-                f"{prediction:.0f} cones"
-            )
-
-            if temperature < 50 or temperature > 100:
-                st.warning(
-                    "This temperature is outside the model's training "
-                    "range of 50–100°F. Treat the estimate with caution."
-                )
-
-            if prediction > 300:
-                st.info(
-                    "Busy day expected: consider preparing more stock."
-                )
-            elif prediction > 200:
-                st.info("A normal sales day is expected.")
-            else:
-                st.info(
-                    "Slow day expected: consider preparing less stock."
-                )
-
     except (
         requests.RequestException,
         ValueError,
@@ -132,10 +84,64 @@ if st.button("Predict sales", type="primary"):
         TypeError,
     ):
         st.error(
-            "Unable to retrieve the forecast or calculate a prediction. "
-            "Please try another date and confirm you uploaded the "
-            "updated two-predictor model."
+            "Unable to retrieve the weather forecast. "
+            "Please try again or choose another date."
+        )
+        st.stop()
+
+    if temperature is None or rain_probability is None:
+        st.error(
+            "The forecast is incomplete. Please choose another date."
+        )
+        st.stop()
+
+    # Match the predictor names and order used during training.
+    features = pd.DataFrame({
+        "temperature": [temperature],
+        "rain_probability": [rain_probability],
+    })
+
+    try:
+        prediction = max(0, float(model.predict(features)[0]))
+    except ValueError:
+        st.error(
+            "The saved model does not match these inputs. "
+            "Upload the updated model.pkl trained with temperature "
+            "and rain_probability."
+        )
+        st.stop()
+
+    st.subheader("Prediction results")
+
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric(
+        "Forecast temperature",
+        f"{temperature:.0f} °F"
+    )
+
+    col2.metric(
+        "Precipitation probability",
+        f"{rain_probability:.0f}%"
+    )
+
+    col3.metric(
+        "Predicted sales",
+        f"{prediction:.0f} cones"
+    )
+
+    if temperature < 50 or temperature > 100:
+        st.warning(
+            "This temperature is outside the model's training range "
+            "of 50–100°F. Treat the estimate with caution."
         )
 
+    if prediction > 300:
+        st.info("Busy day expected: consider preparing more stock.")
+    elif prediction > 200:
+        st.info("A normal sales day is expected.")
+    else:
+        st.info("Slow day expected: consider preparing less stock.")
+
 st.caption("Weather forecasts provided by Open-Meteo.")
-st.link_button("Weather data source", "https://open-meteo.com/")
+st.markdown("[Weather data source](https://open-meteo.com/)")
